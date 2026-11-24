@@ -8,9 +8,40 @@ export const DEFAULT_MODELS = [
   'workbuddy-ai/hy-image-3.5',
   'workbuddy/hunyuan-image-alpha',
   'minimax-code/MiniMax-Image',
-]
+] as const
 
-async function rpc(method, params) {
+/** 网关返回的内容块 */
+interface ContentBlock {
+  type?: string
+  text?: string
+  data?: string
+  mimeType?: string
+}
+
+interface ToolResult {
+  content?: ContentBlock[]
+  _meta?: Record<string, { url?: string }[]>
+  isError?: boolean
+}
+
+interface JsonRpcResponse {
+  result?: ToolResult
+  error?: { message?: string }
+}
+
+export interface GeneratedImage {
+  buffer?: Buffer
+  url?: string
+  mimeType?: string
+}
+
+export interface GenerateResult {
+  buffer: Buffer
+  mimeType: string
+  model: string
+}
+
+async function rpc(method: string, params: Record<string, unknown>): Promise<ToolResult> {
   const response = await fetch(GATEWAY_URL, {
     method: 'POST',
     headers: {
@@ -23,30 +54,30 @@ async function rpc(method, params) {
   if (!response.ok)
     throw new Error(`网关返回 HTTP ${response.status}`)
 
-  const payload = await response.json()
+  const payload = await response.json() as JsonRpcResponse
   if (payload.error)
     throw new Error(payload.error.message || '网关 JSON-RPC 错误')
 
-  return payload.result
+  return payload.result ?? {}
 }
 
-function textOf(result) {
-  return (result?.content || [])
+function textOf(result: ToolResult): string {
+  return (result.content || [])
     .filter(item => item?.type === 'text')
-    .map(item => item.text)
+    .map(item => item.text ?? '')
     .join('\n')
 }
 
-function imageOf(result) {
-  const inline = (result?.content || []).find(item => item?.type === 'image' && item.data)
+function imageOf(result: ToolResult): GeneratedImage | null {
+  const inline = (result.content || []).find(item => item?.type === 'image' && item.data)
   if (inline)
-    return { buffer: Buffer.from(inline.data, 'base64'), mimeType: inline.mimeType || 'image/png' }
+    return { buffer: Buffer.from(inline.data!, 'base64'), mimeType: inline.mimeType || 'image/png' }
 
-  const url = result?._meta?.['usemagpie.ai/files']?.[0]?.url
+  const url = result._meta?.['usemagpie.ai/files']?.[0]?.url
   return url ? { url } : null
 }
 
-async function download(url) {
+async function download(url: string): Promise<Buffer> {
   const response = await fetch(url, { signal: AbortSignal.timeout(60_000) })
   if (!response.ok)
     throw new Error(`下载生成图片失败：HTTP ${response.status}`)
@@ -54,11 +85,11 @@ async function download(url) {
   return Buffer.from(await response.arrayBuffer())
 }
 
-async function waitForResult(id) {
+async function waitForResult(id: string): Promise<GeneratedImage> {
   for (let attempt = 0; attempt < 30; attempt++) {
     await new Promise(resolve => setTimeout(resolve, 2000))
     const result = await rpc('tools/call', { name: 'generation_result', arguments: { id } })
-    if (result?.isError)
+    if (result.isError)
       throw new Error(textOf(result) || '生成任务失败')
 
     const image = imageOf(result)
@@ -68,15 +99,22 @@ async function waitForResult(id) {
   throw new Error('生成超时，请重试')
 }
 
-export async function generateImage({ prompt, reference = '', model, size = '1024x1024' }) {
-  const args = { prompt, n: 1, size }
+export interface GenerateOptions {
+  prompt: string
+  reference?: string
+  model?: string
+  size?: string
+}
+
+export async function generateImage({ prompt, reference = '', model, size = '1024x1024' }: GenerateOptions): Promise<GenerateResult> {
+  const args: Record<string, unknown> = { prompt, n: 1, size }
   if (model)
     args.model = model
   if (reference)
     args.reference_images = [reference]
 
   const result = await rpc('tools/call', { name: 'generate_image', arguments: args })
-  if (result?.isError)
+  if (result.isError)
     throw new Error(textOf(result) || '生图模型返回错误')
 
   let image = imageOf(result)
@@ -88,6 +126,6 @@ export async function generateImage({ prompt, reference = '', model, size = '102
   if (!image)
     throw new Error('生图结果中没有图片')
 
-  const buffer = image.buffer || await download(image.url)
+  const buffer = image.buffer ?? await download(image.url!)
   return { buffer, mimeType: image.mimeType || 'image/png', model: model || DEFAULT_MODELS[0] }
 }

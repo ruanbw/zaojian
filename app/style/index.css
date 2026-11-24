@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@theme {
+  --color-plaster: #f4ede1;
+  --color-plaster-light: #fbf7f0;
+  --color-ink: #2e2823;
+  --color-muted: #7c7166;
+  --color-clay: #8c5a3c;
+  --color-clay-deep: #6f432c;
+  --color-clay-soft: #c9b2a0;
+  --color-sage: #6f7a62;
+  --color-line: rgb(89 66 48 / 0.18);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+
+  --animate-sweep: sweep 1.4s linear infinite;
+}
+
+@keyframes sweep {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background-color: var(--color-plaster);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  textarea,
+  input {
+    font: inherit;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--color-clay-deep);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  /* 页面底纹：两层柔光 + 细颗粒噪点 */
+  .plaster {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(120% 85% at 8% 0%, var(--color-plaster-light) 0%, transparent 62%),
+      radial-gradient(90% 70% at 100% 100%, #e7d9c4 0%, transparent 70%),
+      var(--color-plaster);
+  }
+
+  .plaster::after {
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.16'/%3E%3C/svg%3E");
+    content: "";
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

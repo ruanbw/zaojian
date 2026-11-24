@@ -1,5 +1,6 @@
-export const SCENE_IMAGE = '/static/images/scene.svg'
-export const API_BASE = 'http://localhost:3001'
+import sceneImage from '@/assets/images/scene.svg'
+
+export const SCENE_IMAGE = sceneImage
 
 export interface CaseItem {
   title: string

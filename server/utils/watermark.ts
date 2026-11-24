@@ -3,7 +3,7 @@ import sharp from 'sharp'
 
 const LABEL = 'AI 生成 · 造间'
 
-export async function addBrandWatermark(buffer) {
+export async function addBrandWatermark(buffer: Buffer): Promise<Buffer> {
   const { width = 1024, height = 1024 } = await sharp(buffer).metadata()
   const fontSize = Math.max(18, Math.round(width * 0.032))
   const paddingX = Math.round(fontSize * 0.9)
