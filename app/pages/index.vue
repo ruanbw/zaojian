@@ -35,7 +35,9 @@ function goGenerate() {
           class="block aspect-[4/3] w-full rounded-[18px] border border-line bg-[#efe4d3] object-cover"
           :class="{
             'object-[65%_50%]': index === 1,
+            'sepia-[0.14] saturate-[0.92] brightness-[1.02]': index === 1,
             'object-[35%_50%]': index === 2,
+            'hue-rotate-[-12deg] saturate-[0.88] brightness-[0.98]': index === 2,
           }"
           :src="SCENE_IMAGE"
           :alt="`示例效果图：${item.title}`"
