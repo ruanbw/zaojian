@@ -10,6 +10,14 @@
   --color-clay-soft: #c9b2a0;
   --color-sage: #6f7a62;
   --color-line: rgb(89 66 48 / 0.18);
+  --color-cream: #fff9f1; /* 主按钮文字、浅色描边 */
+  --color-cream-soft: #fbf6ef; /* 禁用态文字 */
+  --color-sand: #efe4d3; /* 图片占位底色 */
+  --color-paper: #fffdf9; /* 卡片与输入框底色 */
+  --color-veil: #18130f; /* 预览遮罩底色 */
+  --color-placeholder: #a79a8c; /* 占位提示文字 */
+  --color-clay-halo: rgb(140 90 60 / 0.1); /* 聚焦光晕 */
+  --color-clay-wash: rgb(140 90 60 / 0.08); /* chip 选中底色 */
 
   --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-serif: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", serif;
@@ -80,6 +88,8 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    /* sweep 是 infinite 动画，压到 0.01ms 会持续重绘烧 CPU，限制为只跑一次 */
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
