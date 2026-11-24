@@ -5,9 +5,12 @@ defineOptions({ name: 'HomePage' })
 
 useHead({ title: '造间 · 案例灵感' })
 
-function goGenerate() {
-  navigateTo('/generate')
-}
+// 案例卡点进生成页时，把描述作为提示词预填（去掉末尾中文句号）
+const caseLinks = cases.map((item) => ({
+  title: item.title,
+  description: item.description,
+  to: { path: '/generate', query: { p: item.description.replace(/。$/, '') } },
+}))
 </script>
 
 <template>
@@ -30,37 +33,45 @@ function goGenerate() {
     </section>
 
     <section class="grid gap-7" aria-label="案例展示">
-      <article v-for="(item, index) in cases" :key="item.title">
+      <div>
         <img
-          class="block aspect-[4/3] w-full rounded-[18px] border border-line bg-[#efe4d3] object-cover"
-          :class="{
-            'object-[65%_50%]': index === 1,
-            'sepia-[0.14] saturate-[0.92] brightness-[1.02]': index === 1,
-            'object-[35%_50%]': index === 2,
-            'hue-rotate-[-12deg] saturate-[0.88] brightness-[0.98]': index === 2,
-          }"
+          class="block aspect-[4/5] w-full rounded-[18px] border border-line bg-sand object-cover"
           :src="SCENE_IMAGE"
-          :alt="`示例效果图：${item.title}`"
+          alt="示例：造间风格的客厅示意图"
+          loading="eager"
+          decoding="async"
         >
         <div class="pt-3">
           <span class="inline-block rounded-full border border-sage/45 px-2 py-px text-[11px] leading-[1.6] text-sage">示例灵感</span>
-          <h2 class="mt-2 mb-1 font-serif text-[19px] font-semibold">
+        </div>
+      </div>
+
+      <div class="grid gap-3">
+        <NuxtLink
+          v-for="item in caseLinks"
+          :key="item.title"
+          :to="item.to"
+          class="block rounded-[14px] border border-line bg-paper/45 p-4 transition-colors duration-200 hover:border-clay active:bg-clay-wash"
+        >
+          <h2 class="m-0 font-serif text-[19px] font-semibold">
             {{ item.title }}
           </h2>
-          <p class="m-0 text-[13px] leading-[1.6] text-muted">
+          <p class="m-0 mt-1 text-[13px] leading-[1.6] text-muted">
             {{ item.description }}
           </p>
-        </div>
-      </article>
+        </NuxtLink>
+      </div>
     </section>
   </main>
 
-  <div class="pointer-events-none fixed inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-plaster from-[42%] to-transparent px-6 pt-7 pb-[calc(18px+env(safe-area-inset-bottom))]">
-    <button
-      class="pointer-events-auto grid min-h-14 w-full max-w-[392px] place-items-center rounded-2xl bg-clay text-base font-semibold tracking-[0.08em] text-[#fff9f1] shadow-[inset_0_1px_0_rgb(255_255_255/0.16),0_8px_22px_-14px_rgb(99_61_38/0.7)] transition-[background,transform] duration-200 hover:bg-clay-deep active:translate-y-px"
-      @click="goGenerate"
-    >
-      生成我的家
-    </button>
+  <div class="pointer-events-none fixed inset-x-0 bottom-0 flex justify-center">
+    <div class="mx-auto w-full max-w-[440px] bg-gradient-to-t from-plaster from-[42%] to-transparent px-6 pt-7 pb-[calc(18px+env(safe-area-inset-bottom))]">
+      <NuxtLink
+        to="/generate"
+        class="pointer-events-auto grid min-h-14 w-full max-w-[392px] place-items-center rounded-2xl bg-clay text-base font-semibold tracking-[0.08em] text-cream shadow-[inset_0_1px_0_rgb(255_255_255/0.16),0_8px_22px_-14px_rgb(99_61_38/0.7)] transition-[background,transform] duration-200 hover:bg-clay-deep active:translate-y-px"
+      >
+        生成我的家
+      </NuxtLink>
+    </div>
   </div>
 </template>
