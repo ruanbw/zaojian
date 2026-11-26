@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer'
 import process from 'node:process'
 
 /**
@@ -18,9 +17,10 @@ export const IMAGE_MODEL = 'image-01'
 /**
  * 一次生成请求的总时间预算：超时统一按 504 处理。
  * EdgeOne Cloud Functions 单次执行上限 120 秒（maxDuration），
- * 预算必须为水印、写 Blob、响应留出余量。
+ * 预算为响应解析与返回留出余量。
  */
 export const TOTAL_BUDGET_MS = 100_000
+
 
 /** image-01 同步生成通常十几秒，单次请求上限与总预算取小 */
 const REQUEST_TIMEOUT = 90_000
@@ -31,9 +31,7 @@ const TIMEOUT_MESSAGE = '生成超时，请重试。'
 export const isConfigured = API_KEY !== ''
 
 export interface GenerateResult {
-  buffer: Buffer
-  mimeType: string
-  model: string
+  url: string
 }
 
 export interface GenerateOptions {
@@ -90,7 +88,6 @@ function resolveTimeout(deadline: number | undefined): number {
 interface MiniMaxResponse {
   id?: string
   data?: {
-    image_base64?: string[]
     image_urls?: string[]
   }
   metadata?: { success_count?: number, failed_count?: number }
@@ -106,13 +103,14 @@ export async function generateImage({ prompt, reference = '', deadline }: Genera
     prompt,
     n: 1,
     aspect_ratio: '1:1',
-    // base64 一步拿到字节：URL 形态 24 小时过期且还要再下载一次
-    response_format: 'base64',
+    // 直接返回模型 URL：服务端不下载、不转存，前端按 1 小时有效期管理缓存
+    response_format: 'url',
   }
   // image-01 唯一的图生图入口是 subject_reference，且只支持 character 类型
   if (reference) {
     body.subject_reference = [{ type: 'character', image_file: reference }]
   }
+
 
   let response: Response
   try {
@@ -149,15 +147,11 @@ export async function generateImage({ prompt, reference = '', deadline }: Genera
   if (payload.base_resp.status_code !== 0)
     throw toGenerateError(payload.base_resp.status_code ?? -1, payload.base_resp.status_msg ?? '')
 
-  const encoded = payload.data?.image_base64?.[0]
-  if (!encoded) {
+  const url = payload.data?.image_urls?.[0]
+  if (!url) {
     // status_code 0 但没图：全部被内容安全拦截（failed_count > 0）
     throw new GenerateError('生成结果为空，描述可能未通过内容安全审核。', 'content')
   }
 
-  return {
-    buffer: Buffer.from(encoded, 'base64'),
-    mimeType: 'image/jpeg',
-    model: IMAGE_MODEL,
-  }
+  return { url }
 }

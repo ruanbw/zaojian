@@ -13,17 +13,19 @@ defineOptions({ name: 'GeneratePage' })
 useHead({ title: '造间 · 生成设计图' })
 
 const INITIAL_HINT = '写下至少几个词，让空间有据可依。'
+const IMAGE_EXPIRY_HINT = '图片链接 1 小时内有效，请及时保存；到期后历史记录将自动删除。'
 
 const prompt = ref('')
 const hint = ref(INITIAL_HINT)
 // 打开历史记录时暂存的描述，只在用户点「继续生成」时才写回输入框
 const historyPrompt = ref('')
+const resultExpiresAt = ref('')
 const referenceData = ref('')
 const sceneImage = ref('')
-const resultReference = ref('')
 const echoText = ref('')
+const resultReference = ref('')
 const resultMeta = ref('')
-// 存储告警与时间戳分开存放，互不覆盖
+// 链接时效与存储告警分开于时间戳，互不覆盖
 const resultNotice = ref('')
 const editLabel = ref('修改描述')
 const records = ref<HistoryRecord[]>([])
@@ -47,6 +49,7 @@ const reduceMotion = ref(false)
 
 let controller: AbortController | undefined
 let motionQuery: MediaQueryList | undefined
+let expiryTimer: number | undefined
 let previewTrigger: HTMLElement | null = null
 
 const count = computed(() => prompt.value.length)
@@ -71,10 +74,11 @@ function goHome() {
 function showProof(record: HistoryRecord, fromHistory = false) {
   echoText.value = record.prompt
   sceneImage.value = record.image
+  resultExpiresAt.value = record.expiresAt
   // 历史记录不再保存参考图本体，只有本次生成还持有
   resultReference.value = fromHistory ? '' : referenceData.value
   resultMeta.value = `生成于 ${formatTime(record.createdAt)}`
-  resultNotice.value = ''
+  resultNotice.value = IMAGE_EXPIRY_HINT
   resultImageFailed.value = false
   editLabel.value = fromHistory ? '继续生成' : '修改描述'
   // 只暂存历史描述，点开记录不会覆盖正在写的草稿
@@ -85,6 +89,7 @@ function showProof(record: HistoryRecord, fromHistory = false) {
   loadingVisible.value = false
   proofVisible.value = true
   editVisible.value = true
+  scheduleExpiry()
   scrollTo('.result')
 }
 
@@ -188,13 +193,20 @@ async function submit() {
       body: JSON.stringify({ prompt: text, reference: referenceData.value }),
       signal: ctrl.signal,
     })
-    const data = await response.json().catch(() => ({}))
+    const data = await response.json().catch(() => ({})) as {
+      image?: string
+      expiresAt?: string
+      message?: string
+      statusMessage?: string
+    }
     if (!response.ok)
       throw new Error(errorMessageOf(data, response.status))
 
-    const image = resolveImageUrl(data)
-    if (!image)
-      throw new Error('生成结果缺少图片地址')
+    const image = data.image || ''
+    const expiresAt = data.expiresAt || ''
+    const expiresAtMs = Date.parse(expiresAt)
+    if (!image || Number.isNaN(expiresAtMs) || expiresAtMs <= Date.now())
+      throw new Error('生成结果缺少有效的图片地址或过期时间')
 
     const record: HistoryRecord = {
       id: String(Date.now()),
@@ -202,6 +214,7 @@ async function submit() {
       hasReference: hasReference.value,
       image,
       createdAt: new Date().toISOString(),
+      expiresAt,
     }
     loading.value = false
     showProof(record)
@@ -211,7 +224,8 @@ async function submit() {
     if (saveHistory(items))
       records.value = items.slice(0, MAX_RECORDS)
     else
-      resultNotice.value = '本机存储空间不足，本次记录未保存。'
+      resultNotice.value = `${IMAGE_EXPIRY_HINT} 本机存储空间不足，本次记录未保存。`
+    scheduleExpiry()
   }
   catch (error) {
     loading.value = false
@@ -233,12 +247,6 @@ async function submit() {
   }
 }
 
-/** 后端返回相对路径时同源可直接使用 */
-function resolveImageUrl(data: { image?: string, path?: string }): string {
-  if (data.path)
-    return data.path
-  return data.image || ''
-}
 
 /**
  * Nitro 的错误体形如 { error: true, statusMessage, message }，
@@ -296,6 +304,37 @@ function clearAllHistory() {
   records.value = []
   failedThumbnails.clear()
   hint.value = '历史记录已清空。'
+  scheduleExpiry()
+}
+
+/** 页面停留期间也按时清理；loadHistory 会同步删除 localStorage 中的过期记录 */
+function expireCachedImages() {
+  expiryTimer = undefined
+  records.value = loadHistory()
+  failedThumbnails.clear()
+
+  if (resultExpiresAt.value && Date.parse(resultExpiresAt.value) <= Date.now()) {
+    resultExpiresAt.value = ''
+    sceneImage.value = ''
+    resultReference.value = ''
+    resultImageFailed.value = true
+    resultNotice.value = '图片链接已过期，相关缓存已删除。'
+    previewVisible.value = false
+  }
+  scheduleExpiry()
+}
+
+function scheduleExpiry() {
+  if (expiryTimer !== undefined)
+    window.clearTimeout(expiryTimer)
+  expiryTimer = undefined
+
+  const nextExpiry = Math.min(
+    ...records.value.map(record => Date.parse(record.expiresAt)),
+    resultExpiresAt.value ? Date.parse(resultExpiresAt.value) : Number.POSITIVE_INFINITY,
+  )
+  if (Number.isFinite(nextExpiry))
+    expiryTimer = window.setTimeout(expireCachedImages, Math.max(0, nextExpiry - Date.now()))
 }
 
 function syncReduceMotion() {
@@ -305,6 +344,7 @@ function syncReduceMotion() {
 onMounted(() => {
   window.addEventListener('keydown', onPreviewKeydown)
   records.value = loadHistory()
+  scheduleExpiry()
 
   // 跟随系统「减弱动态效果」的实时变化
   motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -323,6 +363,8 @@ onUnmounted(() => {
   motionQuery?.removeEventListener('change', syncReduceMotion)
   document.body.style.overflow = ''
   controller?.abort()
+  if (expiryTimer !== undefined)
+    window.clearTimeout(expiryTimer)
 })
 </script>
 
@@ -472,6 +514,7 @@ onUnmounted(() => {
           清空
         </button>
       </div>
+      <p v-if="!proofVisible" class="mb-4 text-[11px] text-muted">{{ IMAGE_EXPIRY_HINT }}</p>
       <div class="grid gap-2.5">
         <button
           v-for="record in records"

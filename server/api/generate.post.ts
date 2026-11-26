@@ -1,11 +1,9 @@
-import type { Buffer } from 'node:buffer'
-import { randomUUID } from 'node:crypto'
 import type { GenerateResult } from '../utils/gateway'
 import { GenerateError, generateImage, IMAGE_MODEL, isConfigured, TOTAL_BUDGET_MS } from '../utils/gateway'
-import { addBrandWatermark } from '../utils/watermark'
-import { pruneGenerated, saveGeneratedImage } from '../utils/storage'
 
 const REFERENCE_PATTERN = /^data:image\/(?:png|jpe?g|webp);base64,/i
+
+const IMAGE_URL_TTL_MS = 60 * 60 * 1000
 
 /** 标准 reason phrase：statusMessage 会进入 HTTP 状态行，必须保持 ASCII */
 const REASON_PHRASES: Record<number, string> = {
@@ -67,24 +65,9 @@ export default defineEventHandler(async (event) => {
     fail(502, '生图服务暂时不可用，请稍后重试。')
   }
 
-  let imageUrl: string
-  try {
-    const finalBuffer: Buffer = await addBrandWatermark(generated.buffer)
-    const filename = `${Date.now()}-${randomUUID()}.png`
-    imageUrl = await saveGeneratedImage(filename, finalBuffer)
-  }
-  catch (error) {
-    // 用户已付费生成，后处理失败要让他知道图没存上；细节只进日志
-    console.warn(`生成后处理失败：${error instanceof Error ? error.message : String(error)}`)
-    fail(502, '图片已生成但保存失败，请稍后重试。')
-  }
-
-  // 产物保留策略：只保留最新 200 张，历史记录里的旧图会失效（前端有降级占位）
-  await pruneGenerated()
-
   return {
-    image: imageUrl,
-    path: imageUrl,
+    image: generated.url,
+    expiresAt: new Date(Date.now() + IMAGE_URL_TTL_MS).toISOString(),
     model: IMAGE_MODEL,
   }
 })

@@ -5,6 +5,8 @@ export interface HistoryRecord {
   hasReference: boolean
   image: string
   createdAt: string
+  /** 模型图片链接的过期时间，到期后不再保留该记录 */
+  expiresAt: string
 }
 
 const STORAGE_KEY = 'zaojian:history:v2'
@@ -20,6 +22,8 @@ function isHistoryRecord(value: unknown): value is HistoryRecord {
     && typeof item.hasReference === 'boolean'
     && typeof item.createdAt === 'string'
     && !Number.isNaN(Date.parse(item.createdAt))
+    && typeof item.expiresAt === 'string'
+    && !Number.isNaN(Date.parse(item.expiresAt))
 }
 
 export function loadHistory(): HistoryRecord[] {
@@ -27,7 +31,15 @@ export function loadHistory(): HistoryRecord[] {
     const items = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
     if (!Array.isArray(items))
       return []
-    return items.filter(isHistoryRecord).slice(0, MAX_RECORDS)
+    const now = Date.now()
+    const records = items
+      .filter(isHistoryRecord)
+      .filter(item => Date.parse(item.expiresAt) > now)
+      .slice(0, MAX_RECORDS)
+    // 打开页面时立即清除已过期记录，而不是仅在渲染时隐藏
+    if (records.length !== items.length)
+      saveHistory(records)
+    return records
   }
   catch {
     return []
