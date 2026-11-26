@@ -35,3 +35,7 @@ server/generated/
 
 docs/.vitepress/dist
 docs/.vitepress/cache
+
+# EdgeOne CLI 本地状态（项目关联、拉取的 .env）
+.env
+.tef_dist/*
