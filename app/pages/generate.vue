@@ -147,7 +147,7 @@ async function addReference() {
 
   try {
     referenceData.value = await compressImage(file)
-    hint.value = '参考图已添加，会随本次请求一起发送。'
+    hint.value = '参考图已添加。当前模型只支持人物主体参考，空间照片仅作风格参考。'
   }
   catch {
     hint.value = '读取图片失败，请换一张再试。'

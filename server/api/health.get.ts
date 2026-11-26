@@ -1,6 +1,6 @@
-import { DEFAULT_MODELS } from '../utils/gateway'
+import { IMAGE_MODEL, isConfigured } from '../utils/gateway'
 
 export default defineEventHandler(() => ({
-  ok: true,
-  models: DEFAULT_MODELS,
+  ok: isConfigured,
+  models: isConfigured ? [IMAGE_MODEL] : [],
 }))

@@ -1,7 +1,7 @@
 import type { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import type { GenerateResult } from '../utils/gateway'
-import { DEFAULT_MODELS, generateImage, TOTAL_BUDGET_MS } from '../utils/gateway'
+import { GenerateError, generateImage, IMAGE_MODEL, isConfigured, TOTAL_BUDGET_MS } from '../utils/gateway'
 import { addBrandWatermark } from '../utils/watermark'
 import { pruneGenerated, saveGeneratedImage } from '../utils/storage'
 
@@ -10,7 +10,6 @@ const REFERENCE_PATTERN = /^data:image\/(?:png|jpe?g|webp);base64,/i
 /** 标准 reason phrase：statusMessage 会进入 HTTP 状态行，必须保持 ASCII */
 const REASON_PHRASES: Record<number, string> = {
   400: 'Bad Request',
-  404: 'Not Found',
   502: 'Bad Gateway',
   504: 'Gateway Timeout',
 }
@@ -23,76 +22,49 @@ function fail(statusCode: number, message: string): never {
   throw createError({ statusCode, statusMessage: REASON_PHRASES[statusCode], message })
 }
 
-/** 判断错误是否属于超时：AbortSignal 超时抛 TimeoutError / AbortError，也兼容文案里的「超时」 */
-function isTimeoutError(error: unknown): boolean {
-  if (!error || typeof error !== 'object')
-    return false
-
-  if ('name' in error && typeof error.name === 'string'
-    && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
-    return true
+/** 错误类别 → HTTP 状态：鉴权/余额/内容问题对客户端都是 502 或 400，不暴露上游细节 */
+function statusOf(kind: GenerateError['kind']): number {
+  switch (kind) {
+    case 'timeout':
+      return 504
+    case 'content':
+      return 400
+    default:
+      return 502
   }
-
-  const message = error instanceof Error ? error.message : ''
-  return message.includes('超时')
 }
 
 export default defineEventHandler(async (event) => {
-  // 没有配置生图后端时不进入候选循环：空列表会跳过所有模型并落到通用的 502 文案
-  if (DEFAULT_MODELS.length === 0) {
-    console.warn('生图后端未配置：请设置 MAGPIE_IMAGE_MCP 与 IMAGE_MODELS')
+  // 没有配置 API key 时不发请求，直接 502
+  if (!isConfigured) {
+    console.warn('生图后端未配置：请设置 MINIMAX_API_KEY')
     fail(502, '生图服务尚未配置。')
   }
 
-  // 整个请求共享同一个时间预算：多模型 fallback 也在这段时间内，不再每个模型各自计时
-  const deadline = Date.now() + TOTAL_BUDGET_MS
-
-  const body = await readBody<{ prompt?: unknown, reference?: unknown, model?: unknown, size?: unknown }>(event)
+  const body = await readBody<{ prompt?: unknown, reference?: unknown }>(event)
 
   const prompt = typeof body?.prompt === 'string' ? body.prompt : ''
   const reference = typeof body?.reference === 'string' ? body.reference : ''
-  const model = typeof body?.model === 'string' ? body.model : undefined
-  const size = typeof body?.size === 'string' ? body.size : '1024x1024'
 
   if (!prompt.trim() || prompt.length > 120)
     fail(400, '描述需为 1-120 个字符')
   if (reference && !REFERENCE_PATTERN.test(reference))
     fail(400, '参考图格式不支持')
 
-  const candidates = model ? [model] : DEFAULT_MODELS
-  let generated: GenerateResult | undefined
-  let lastError: unknown
-  let timedOut = false
+  // 整个请求共享一个时间预算
+  const deadline = Date.now() + TOTAL_BUDGET_MS
 
-  for (const candidate of candidates) {
-    // 预算已耗尽：不再尝试后续模型，直接按超时处理
-    if (Date.now() >= deadline) {
-      timedOut = true
-      lastError = new Error('生成超时，请重试。')
-      console.warn('生成预算已耗尽，停止尝试后续模型')
-      break
-    }
-
-    try {
-      generated = await generateImage({ prompt: prompt.trim(), reference, model: candidate, size, deadline })
-      break
-    }
-    catch (error) {
-      lastError = error
-      console.warn(`生图模型 ${candidate} 失败：${error instanceof Error ? error.message : String(error)}`)
-      if (isTimeoutError(error)) {
-        timedOut = true
-        break
-      }
-    }
+  let generated: GenerateResult
+  try {
+    generated = await generateImage({ prompt: prompt.trim(), reference, deadline })
   }
-
-  if (!generated) {
-    // 用户可见文案不暴露模型名与网关原始报错，细节只留在服务端日志
-    console.warn(`生成失败：${lastError instanceof Error ? lastError.message : '没有可用的生图模型'}`)
-    if (timedOut)
-      fail(504, '生成超时，请重试。')
-    fail(502, '生成服务暂时不可用，请稍后重试。')
+  catch (error) {
+    if (error instanceof GenerateError) {
+      console.warn(`生成失败（${error.kind}）：${error.message}`)
+      fail(statusOf(error.kind), error.message)
+    }
+    console.warn(`生成失败：${error instanceof Error ? error.message : String(error)}`)
+    fail(502, '生图服务暂时不可用，请稍后重试。')
   }
 
   const finalBuffer: Buffer = await addBrandWatermark(generated.buffer)
@@ -105,6 +77,6 @@ export default defineEventHandler(async (event) => {
   return {
     image: imageUrl,
     path: imageUrl,
-    model: generated.model,
+    model: IMAGE_MODEL,
   }
 })
