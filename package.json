@@ -3,13 +3,6 @@
   "type": "module",
   "version": "4.4.1",
   "description": "造间 · 空间灵感生成",
-  "author": {
-    "name": "feige996",
-    "zhName": "菲鸽",
-    "email": "1020103647@qq.com",
-    "github": "https://github.com/feige996",
-    "gitee": "https://gitee.com/feige996"
-  },
   "license": "MIT",
   "engines": {
     "node": ">=20",
@@ -37,8 +30,5 @@
     "tailwindcss": "^4.3.5",
     "typescript": "~5.8.0",
     "vue-tsc": "^3.0.6"
-  },
-  "lint-staged": {
-    "*": "echo 祝菲鸽身体健康"
-  }
+}
 }
