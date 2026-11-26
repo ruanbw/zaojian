@@ -74,9 +74,9 @@ export default defineEventHandler(async (event) => {
     imageUrl = await saveGeneratedImage(filename, finalBuffer)
   }
   catch (error) {
-    // 用户已付费生成，后处理失败要让他知道图没存上；细节只进日志
+    // 诊断：临时把内部错误透传到响应，确认 Blob 失败原因后改回用户文案
     console.warn(`生成后处理失败：${error instanceof Error ? error.message : String(error)}`)
-    fail(502, '图片已生成但保存失败，请稍后重试。')
+    fail(500, `后处理失败：${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`)
   }
 
   // 产物保留策略：只保留最新 200 张，历史记录里的旧图会失效（前端有降级占位）
