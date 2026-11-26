@@ -32,6 +32,10 @@ export default defineNuxtConfig({
     // sharp 是原生模块，保持外部化由 nitro 追踪复制，不要 inline
     externals: {
       external: ['sharp'],
+      // @edgeone/pages-blob 必须 inline：EdgeOne 构建期会替换 SDK 里的
+      // {{PAGES_BLOB_DEPLOY_CREDENTIAL}} 占位符，但替换逻辑会跳过 node_modules 目录。
+      // inline 后 SDK 代码进入 chunks/ 顶层文件，凭证才能被正确注入。
+      inline: ['@edgeone/pages-blob'],
     },
   },
 
