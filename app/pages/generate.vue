@@ -167,11 +167,11 @@ async function submit() {
   const ctrl = new AbortController()
   controller = ctrl
   let timedOut = false
-  // 客户端比服务端总预算多留 30 秒余量
+  // 客户端比服务端总预算（100 秒）多留 20 秒余量
   const timeout = setTimeout(() => {
     timedOut = true
     ctrl.abort()
-  }, 180_000)
+  }, 120_000)
   echoText.value = text
   composerVisible.value = false
   resultVisible.value = true

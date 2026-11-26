@@ -15,6 +15,9 @@ dist
 .data
 *.local
 .env*.local
+# EdgeOne CLI 构建期产物（@edgeone/nuxt-pages 注入的临时 Nuxt 模块与 ssr-node 输出）
+.edgeone-nitro-config.mjs
+.edgeone/
 .pi/
 server/generated/
 

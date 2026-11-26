@@ -1,0 +1,7 @@
+{
+  "nodeVersion": "24.18.0",
+  "installCommand": "pnpm install",
+  "cloudFunctions": {
+    "maxDuration": 120
+  }
+}

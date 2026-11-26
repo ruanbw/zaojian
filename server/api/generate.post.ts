@@ -1,17 +1,9 @@
 import type { Buffer } from 'node:buffer'
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import process from 'node:process'
 import { randomUUID } from 'node:crypto'
 import type { GenerateResult } from '../utils/gateway'
 import { DEFAULT_MODELS, generateImage, TOTAL_BUDGET_MS } from '../utils/gateway'
 import { addBrandWatermark } from '../utils/watermark'
-import { pruneGenerated } from '../utils/retention'
-
-// 生成图存放目录：放在 public/ 之外，避免构建时被复制进产物而与运行期新增不同步
-const OUTPUT_DIR = process.env.GENERATED_DIR
-  ? path.resolve(process.env.GENERATED_DIR)
-  : path.resolve(process.cwd(), 'server/generated')
+import { pruneGenerated, saveGeneratedImage } from '../utils/storage'
 
 const REFERENCE_PATTERN = /^data:image\/(?:png|jpe?g|webp);base64,/i
 
@@ -46,6 +38,12 @@ function isTimeoutError(error: unknown): boolean {
 }
 
 export default defineEventHandler(async (event) => {
+  // 没有配置生图后端时不进入候选循环：空列表会跳过所有模型并落到通用的 502 文案
+  if (DEFAULT_MODELS.length === 0) {
+    console.warn('生图后端未配置：请设置 MAGPIE_IMAGE_MCP 与 IMAGE_MODELS')
+    fail(502, '生图服务尚未配置。')
+  }
+
   // 整个请求共享同一个时间预算：多模型 fallback 也在这段时间内，不再每个模型各自计时
   const deadline = Date.now() + TOTAL_BUDGET_MS
 
@@ -98,16 +96,15 @@ export default defineEventHandler(async (event) => {
   }
 
   const finalBuffer: Buffer = await addBrandWatermark(generated.buffer)
-  await fs.mkdir(OUTPUT_DIR, { recursive: true })
   const filename = `${Date.now()}-${randomUUID()}.png`
-  await fs.writeFile(path.join(OUTPUT_DIR, filename), finalBuffer)
+  const imageUrl = await saveGeneratedImage(filename, finalBuffer)
 
   // 产物保留策略：只保留最新 200 张，历史记录里的旧图会失效（前端有降级占位）
-  await pruneGenerated(OUTPUT_DIR)
+  await pruneGenerated()
 
   return {
-    image: `/generated/${filename}`,
-    path: `/generated/${filename}`,
+    image: imageUrl,
+    path: imageUrl,
     model: generated.model,
   }
 })

@@ -2,11 +2,19 @@ import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { setTimeout as sleep } from 'node:timers/promises'
 
-const GATEWAY_URL = process.env.MAGPIE_IMAGE_MCP || 'http://127.0.0.1:3425/mcp/magpie/image'
+/**
+ * 生图网关地址：EdgeOne 上没有本机服务，必须由环境变量提供。
+ * 未配置时故意留空，请求会立即失败并返回 502，而不是把 localhost 编进产物。
+ */
+const GATEWAY_URL = process.env.MAGPIE_IMAGE_MCP || ''
 const REQUEST_TIMEOUT = 180_000
 
-/** 一次生成请求的总时间预算：所有候选模型共享，超时统一按 504 处理 */
-export const TOTAL_BUDGET_MS = 150_000
+/**
+ * 一次生成请求的总时间预算：所有候选模型共享，超时统一按 504 处理。
+ * EdgeOne Cloud Functions 单次执行上限 120 秒（maxDuration），
+ * 预算必须为水印、写 Blob、响应留出余量。
+ */
+export const TOTAL_BUDGET_MS = 100_000
 
 /** 单次图片下载上限 */
 const DOWNLOAD_TIMEOUT = 60_000
@@ -18,11 +26,16 @@ const POLL_INTERVAL_MS = 2000
 /** 超时文案：服务端与前端保持一致 */
 const TIMEOUT_MESSAGE = '生成超时，请重试。'
 
-export const DEFAULT_MODELS = [
-  'workbuddy-ai/hy-image-3.5',
-  'workbuddy/hunyuan-image-alpha',
-  'minimax-code/MiniMax-Image',
-] as const
+/**
+ * 候选模型，按顺序尝试。由环境变量 IMAGE_MODELS 配置，逗号分隔；
+ * 未配置时为空，/api/generate 会直接返回 502。
+ */
+function loadModels(): string[] {
+  const raw = process.env.IMAGE_MODELS || ''
+  return raw.split(',').map(item => item.trim()).filter(Boolean)
+}
+
+export const DEFAULT_MODELS: readonly string[] = loadModels()
 
 /** 网关返回的内容块 */
 interface ContentBlock {
@@ -172,5 +185,5 @@ export async function generateImage({ prompt, reference = '', model, size = '102
     throw new Error('生成结果中没有图片')
 
   const buffer = image.buffer ?? await download(image.url!, deadline)
-  return { buffer, mimeType: image.mimeType || 'image/png', model: model || DEFAULT_MODELS[0] }
+  return { buffer, mimeType: image.mimeType || 'image/png', model: model || 'unknown' }
 }
