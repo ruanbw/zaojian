@@ -1,13 +1,16 @@
 import type { GenerateResult } from '../utils/gateway'
 import { GenerateError, generateImage, IMAGE_MODEL, isConfigured, TOTAL_BUDGET_MS } from '../utils/gateway'
+import { clientIpOf, quotaMessage, reserveQuota } from '../utils/quota'
+import { ensureDevice } from '../utils/device'
 
 const REFERENCE_PATTERN = /^data:image\/(?:png|jpe?g|webp);base64,/i
 
 const IMAGE_URL_TTL_MS = 60 * 60 * 1000
 
-/** 标准 reason phrase：statusMessage 会进入 HTTP 状态行，必须保持 ASCII */
+/** 标准化原因短语：statusMessage 会进入 HTTP 状态行，必须保持 ASCII */
 const REASON_PHRASES: Record<number, string> = {
   400: 'Bad Request',
+  429: 'Too Many Requests',
   502: 'Bad Gateway',
   504: 'Gateway Timeout',
 }
@@ -48,6 +51,13 @@ export default defineEventHandler(async (event) => {
     fail(400, '描述需为 1-120 个字符')
   if (reference && !REFERENCE_PATTERN.test(reference))
     fail(400, '参考图格式不支持')
+
+  // 日配额（L1 防刷）：设备 3 / IP 10 / 全站 200，先占位后生图，不回滚。
+  // 必须在调 MiniMax 前执行；设备 Cookie 顺带下发。
+  const device = ensureDevice(event)
+  const quota = await reserveQuota(device.id, clientIpOf(event))
+  if (!quota.allowed && quota.scope)
+    fail(429, quotaMessage(quota.scope))
 
   // 整个请求共享一个时间预算
   const deadline = Date.now() + TOTAL_BUDGET_MS
