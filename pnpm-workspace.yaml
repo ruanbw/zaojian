@@ -1,9 +1,25 @@
 packages:
   - .
 
-onlyBuiltDependencies:
-  - esbuild
-  - sharp
+# pnpm 12 的构建脚本白名单：true 允许跑 lifecycle，false 显式拒绝。
+# less 是 Vite 的可选 CSS 预处理器，项目用 Tailwind，其 postinstall 无需执行。
+allowBuilds:
+  esbuild: true
+  sharp: true
+  less: false
+
+# 同时解析 Linux 的 sharp 原生包：EdgeOne 构建机是 Linux，lockfile 里必须有其条目，
+# 否则云端 --frozen-lockfile 安装不到 linux-x64/arm64 二进制，sharp 加载即崩。
+supportedArchitectures:
+  os:
+    - current
+    - linux
+  cpu:
+    - current
+    - x64
+    - arm64
+  libc:
+    - glibc
 
 minimumReleaseAgeExclude:
   - '@nuxt/kit@4.7.0'

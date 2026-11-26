@@ -67,9 +67,17 @@ export default defineEventHandler(async (event) => {
     fail(502, '生图服务暂时不可用，请稍后重试。')
   }
 
-  const finalBuffer: Buffer = await addBrandWatermark(generated.buffer)
-  const filename = `${Date.now()}-${randomUUID()}.png`
-  const imageUrl = await saveGeneratedImage(filename, finalBuffer)
+  let imageUrl: string
+  try {
+    const finalBuffer: Buffer = await addBrandWatermark(generated.buffer)
+    const filename = `${Date.now()}-${randomUUID()}.png`
+    imageUrl = await saveGeneratedImage(filename, finalBuffer)
+  }
+  catch (error) {
+    // 用户已付费生成，后处理失败要让他知道图没存上；细节只进日志
+    console.warn(`生成后处理失败：${error instanceof Error ? error.message : String(error)}`)
+    fail(502, '图片已生成但保存失败，请稍后重试。')
+  }
 
   // 产物保留策略：只保留最新 200 张，历史记录里的旧图会失效（前端有降级占位）
   await pruneGenerated()

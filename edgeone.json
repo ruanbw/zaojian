@@ -1,6 +1,6 @@
 {
   "nodeVersion": "24.18.0",
-  "installCommand": "pnpm install",
+  "installCommand": "pnpm install --frozen-lockfile",
   "cloudFunctions": {
     "maxDuration": 120
   }

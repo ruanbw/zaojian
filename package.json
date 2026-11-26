@@ -1,5 +1,6 @@
 {
   "name": "image-gen",
+  "packageManager": "pnpm@12.16.1",
   "type": "module",
   "version": "4.4.1",
   "description": "造间 · 空间灵感生成",

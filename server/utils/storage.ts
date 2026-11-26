@@ -113,6 +113,10 @@ export async function saveGeneratedImage(filename: string, data: Buffer): Promis
   const bytes = data.buffer instanceof ArrayBuffer
     ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
     : Uint8Array.from(data).buffer
-  await blob.set(keyOf(filename), bytes)
+  await blob.set(keyOf(filename), bytes).catch((error: unknown) => {
+    const code = error instanceof PagesBlobError ? error.code : error instanceof Error ? error.name : 'unknown'
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new Error(`[storage] blob set failed: ${code} ${detail}`)
+  })
   return `/generated/${filename}`
 }
